@@ -20,10 +20,12 @@ func AddRouter(ctx context.Context, svc *dependencies.Dependencies, config *conf
 	svc.Server.GET("/health", GetHealth)
 
 	v1ApiGroup := svc.Server.Group("/v1")
-	initializeRouters(ctx, v1ApiGroup, svc)
+	initializeV1Routers(ctx, v1ApiGroup, svc)
 }
 
-func initializeRouters(ctx context.Context, server *gin.RouterGroup, svc *dependencies.Dependencies) {
+func initializeV1Routers(ctx context.Context, server *gin.RouterGroup, svc *dependencies.Dependencies) {
+	hashRouterGroup := server.Group("/hash")
+	NewHashController(hashRouterGroup, svc.Logger, svc.Config)
 	webhookRouterGroup := server.Group("/webhook")
 	webhookRepo := cloudrun.NewCloudRunRepository(svc.CloudRunClient, ctx, svc.Config.ProjectID)
 	webhookUsecase := usecase.NewWebhookUsecase(webhookRepo, svc.Logger)

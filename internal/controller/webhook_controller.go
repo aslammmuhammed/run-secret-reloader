@@ -59,7 +59,7 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 
 		response := dto.WebhookResponse{
 			Message:     "Event processed successfully (no action required)",
-			TraceID:     utils.GetTraceID(c.Request.Context()),
+			TraceID:     logger.GetTraceIDFromContext(c.Request.Context()),
 			ProcessedAt: time.Now().UTC().Format(time.RFC3339),
 		}
 		c.JSON(http.StatusOK, response)
@@ -111,7 +111,7 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 	// Return structured response
 	response := dto.WebhookResponse{
 		Message:       "Webhook processed successfully",
-		TraceID:       utils.GetTraceID(c.Request.Context()),
+		TraceID:       logger.GetTraceIDFromContext(c.Request.Context()),
 		ProcessedAt:   time.Now().UTC().Format(time.RFC3339),
 		ServicesFound: len(services),
 		ServiceNames:  serviceNames,

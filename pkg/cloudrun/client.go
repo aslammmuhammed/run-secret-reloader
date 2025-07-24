@@ -63,5 +63,3 @@ func (c *RunClient) GetServicesByLabel(ctx context.Context, labelKey string) ([]
 
 	return resp.Items, nil
 }
-
-
