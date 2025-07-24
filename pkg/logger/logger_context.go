@@ -69,8 +69,8 @@ func New(format string, logLevel string) *Logger {
 	}
 }
 
-// getTraceIDFromContext extracts trace ID from context
-func getTraceIDFromContext(ctx context.Context) string {
+// GetTraceIDFromContext extracts trace ID from context
+func GetTraceIDFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
@@ -89,7 +89,7 @@ func getTraceIDFromContext(ctx context.Context) string {
 
 // log is a common logging function that handles different log levels
 func (l *Logger) log(ctx context.Context, level LogLevel, message string) {
-	traceID := getTraceIDFromContext(ctx)
+	traceID := GetTraceIDFromContext(ctx)
 	var fields []zap.Field
 	if traceID == "" {
 		fields = []zap.Field{}
