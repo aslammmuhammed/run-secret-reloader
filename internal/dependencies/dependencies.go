@@ -32,7 +32,7 @@ func NewDependencies(ctx context.Context, cfg *config.Config) (*Dependencies, er
 	server := server.New()
 
 	// Initialize cloudrun client
-	cloudrunClient, err := cloudrun.NewClient(ctx, cfg)
+	cloudrunClient, err := cloudrun.NewClient(ctx, cfg, log)
 	if err != nil {
 		return nil, err
 	}

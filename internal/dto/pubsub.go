@@ -32,4 +32,5 @@ type WebhookResponse struct {
 	ProcessedAt   string   `json:"processedAt,omitempty"`
 	ServicesFound int      `json:"servicesFound,omitempty"`
 	ServiceNames  []string `json:"serviceNames,omitempty"`
+	FailedUpdates []string `json:"failedUpdates,omitempty"`
 }

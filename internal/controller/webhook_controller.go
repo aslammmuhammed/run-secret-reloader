@@ -76,12 +76,13 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 	// }
 
 	// Extract secret name from secretId
-	secretName, err := utils.ExtractSecretName(secretAttrs.SecretID)
+	secretName, version, err := utils.ExtractSecretNameAndVersionFromVersionID(secretAttrs.VersionID)
 	if err != nil {
 		HandleError(c, w.logger, err)
 		return
 	}
-	labelKey := "run_secret_reloader-" + utils.HashSecretName(secretName) // Create label to search for services using this secret
+	hashSecretName := utils.HashSecretName(secretName)
+	labelKey := "run_secret_reloader-" + hashSecretName // Create label to search for services using this secret
 
 	w.logger.Info(c.Request.Context(), "Searching for services | secretName: "+secretName+" | labelKey: "+labelKey)
 
@@ -105,16 +106,40 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 		}
 	}
 
-	// Log successful HTTP response
-	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: 200 | servicesFound: "+strconv.Itoa(len(services)))
+	// Create new annotations and labels
+	newAnnotations := map[string]string{
+		"run_secret_reloader-" + hashSecretName + "/name":    secretName,
+		"run_secret_reloader-" + hashSecretName + "/version": version,
+	}
+	newLabels := map[string]string{
+		"run_secret_reloader-" + hashSecretName + "_version": version,
+	}
+
+	// Update services
+	updatedServices, failedUpdates := w.webhookUsecase.UpdateCloudRunServices(c.Request.Context(), services, newAnnotations, newLabels)
+
+	// Log HTTP response
+	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: 200 | servicesFound: "+strconv.Itoa(len(services))+" | servicesUpdated: "+strconv.Itoa(len(updatedServices))+" | servicesFailed: "+strconv.Itoa(len(failedUpdates)))
+
+	var failedUpdateNames []string
+	for _, service := range failedUpdates {
+		failedUpdateNames = append(failedUpdateNames, service.Metadata.Name)
+	}
+	var message string
+	if len(updatedServices) > 0 {
+		message = "Webhook processed successfully. Services updated: " + strconv.Itoa(len(updatedServices))
+	} else {
+		message = "Webhook processing failed. Services failed to update: " + strconv.Itoa(len(failedUpdates))
+	}
 
 	// Return structured response
 	response := dto.WebhookResponse{
-		Message:       "Webhook processed successfully",
+		Message:       message,
 		TraceID:       logger.GetTraceIDFromContext(c.Request.Context()),
 		ProcessedAt:   time.Now().UTC().Format(time.RFC3339),
-		ServicesFound: len(services),
+		ServicesFound: len(serviceNames),
 		ServiceNames:  serviceNames,
+		FailedUpdates: failedUpdateNames,
 	}
 
 	c.JSON(http.StatusOK, response)

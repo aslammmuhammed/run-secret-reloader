@@ -3,20 +3,27 @@ package cloudrun
 import (
 	"context"
 	"fmt"
+	"maps"
 
+	run_v2 "cloud.google.com/go/run/apiv2"
+	runpb_v2 "cloud.google.com/go/run/apiv2/runpb"
 	"github.com/aslammmuhammed/run-secret-reloader/config"
+	"github.com/aslammmuhammed/run-secret-reloader/pkg/logger"
 	"google.golang.org/api/option"
 	run "google.golang.org/api/run/v1"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // RunClient wraps the Google Cloud Run v1 client
 type RunClient struct {
-	serviceClient *run.APIService
-	projectID     string
+	serviceClient    *run.APIService
+	projectID        string
+	serviceClient_v2 *run_v2.ServicesClient
+	logger           *logger.Logger
 }
 
 // NewClient creates a new CloudRun client with v1 service client only
-func NewClient(ctx context.Context, config *config.Config) (*RunClient, error) {
+func NewClient(ctx context.Context, config *config.Config, logger *logger.Logger) (*RunClient, error) {
 	if config.ProjectID == "" {
 		return nil, fmt.Errorf("project ID is required")
 	}
@@ -38,9 +45,18 @@ func NewClient(ctx context.Context, config *config.Config) (*RunClient, error) {
 		return nil, fmt.Errorf("failed to create v1 run client: %w", err)
 	}
 
+	// Create v2 service client
+	serviceClient_v2, err := run_v2.NewServicesClient(ctx, opts...)
+	if err != nil {
+		// cancel() // Clean up if creation fails
+		return nil, fmt.Errorf("failed to create v2 run client: %w", err)
+	}
+
 	return &RunClient{
-		serviceClient: serviceClient,
-		projectID:     config.ProjectID,
+		serviceClient:    serviceClient,
+		projectID:        config.ProjectID,
+		serviceClient_v2: serviceClient_v2,
+		logger:           logger,
 	}, nil
 }
 
@@ -54,12 +70,92 @@ func (c *RunClient) GetServicesByLabel(ctx context.Context, labelKey string) ([]
 	// List all services across entire project (all regions)
 	parent := fmt.Sprintf("namespaces/%s", c.projectID)
 
+	labelSelector := fmt.Sprintf("%s=true", labelKey)
+
+	c.logger.Debug(ctx, "Using label selector: "+labelSelector)
+
 	// Call the API using Namespaces (V1) API with the provided request context
 	// This ensures proper request tracing and timeout handling
-	resp, err := c.serviceClient.Namespaces.Services.List(parent).Context(ctx).LabelSelector(labelKey).Do()
+	resp, err := c.serviceClient.Namespaces.Services.List(parent).Context(ctx).LabelSelector(labelSelector).Do()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Cloud Run services: %w", err)
 	}
 
 	return resp.Items, nil
+}
+
+func (c *RunClient) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serviceV1 *run.Service, newAnnotations map[string]string, newLabels map[string]string) error {
+
+	serviceName := serviceV1.Metadata.Name
+	region := serviceV1.Metadata.Labels["cloud.googleapis.com/location"]
+	fullName := fmt.Sprintf("projects/%s/locations/%s/services/%s", c.projectID, region, serviceName)
+	// Fetch current service
+	c.logger.Debug(ctx, "Fetching service: "+fullName)
+	service, err := c.serviceClient_v2.GetService(ctx, &runpb_v2.GetServiceRequest{Name: fullName})
+	if err != nil {
+		return fmt.Errorf("failed to get service: %w", err)
+	}
+
+	// Initialize and update template annotations if provided
+	if len(newAnnotations) > 0 {
+		if service.Template == nil {
+			service.Template = &runpb_v2.RevisionTemplate{}
+		}
+		if service.Template.Annotations == nil {
+			service.Template.Annotations = make(map[string]string)
+		}
+
+		c.logger.Debug(ctx, "Template annotations before update:"+fmt.Sprintf("%+v", service.Template.Annotations))
+
+		// Apply new annotations to spec.template.annotations
+		maps.Copy(service.Template.Annotations, newAnnotations)
+	}
+
+	// Initialize and update template labels if provided
+	if len(newLabels) > 0 {
+		if service.Template == nil {
+			service.Template = &runpb_v2.RevisionTemplate{}
+		}
+		if service.Template.Labels == nil {
+			service.Template.Labels = make(map[string]string)
+		}
+
+		c.logger.Debug(ctx, "Template labels before update:"+fmt.Sprintf("%+v", service.Template.Labels))
+
+		// Apply new labels to spec.template.metadata.labels
+		maps.Copy(service.Template.Labels, newLabels)
+	}
+
+	fieldPaths := []string{"template.annotations", "template.labels"}
+
+	c.logger.Debug(ctx, "Using UpdateMask:"+fmt.Sprintf("%v", fieldPaths))
+
+	// Create the update request with specific field mask for both annotations and labels
+	req := &runpb_v2.UpdateServiceRequest{
+		Service: service,
+		UpdateMask: &fieldmaskpb.FieldMask{
+			Paths: fieldPaths, // Update specific annotation and label keys
+		},
+	}
+	// Trigger the update
+	op, err := c.serviceClient_v2.UpdateService(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to update service: %w", err)
+	}
+
+	// Wait for operation to complete with better error handling
+	result, err := op.Wait(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update service: %w", err)
+	}
+
+	c.logger.Debug(ctx, "Update operation completed successfully:"+result.Name)
+	if len(newAnnotations) > 0 {
+		c.logger.Debug(ctx, "Template annotations after update:"+fmt.Sprintf("%+v", service.Template.Annotations))
+	}
+	if len(newLabels) > 0 {
+		c.logger.Debug(ctx, "Template labels after update:"+fmt.Sprintf("%+v", service.Template.Labels))
+	}
+
+	return nil
 }

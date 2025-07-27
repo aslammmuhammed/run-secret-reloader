@@ -32,3 +32,7 @@ func (r *cloudRunRepository) GetServicesByLabel(ctx context.Context, labelKey st
 
 	return services, nil
 }
+
+func (r *cloudRunRepository) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serviceV1 *run.Service, newAnnotations map[string]string, newLabels map[string]string) error {
+	return r.cloudrunClient.UpdateCloudRunAnnotationsAndLabels(ctx, serviceV1, newAnnotations, newLabels)
+}
