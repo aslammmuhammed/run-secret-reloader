@@ -112,13 +112,13 @@ func (c *RunClient) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serv
 	var lastErr error
 	for attempt := 0; attempt < constants.UpdateRetries; attempt++ {
 		if attempt > 0 {
-			c.logger.Info(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Retry attempt %d/%d after error: %v", attempt+1, constants.UpdateRetries, lastErr))
+			c.logger.Info(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Retry attempt %d/%d after error: %v",fullName, attempt+1, constants.UpdateRetries, lastErr))
 			// exponential backoff
 			time.Sleep(constants.UpdateRetryDelay * time.Duration(attempt+1))
 		}
 
 		// fetch latest service state
-		c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Attempt %d: Fetching latest service state: %s", attempt+1, fullName))
+		c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempt %d: Fetching latest service state: %s", fullName, attempt+1, fullName))
 		service, err := c.serviceClient_v2.GetService(ctx, &runpb_v2.GetServiceRequest{Name: fullName})
 		if err != nil {
 			lastErr = fmt.Errorf("failed to get service: %w", err)
@@ -133,7 +133,7 @@ func (c *RunClient) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serv
 			if service.Template.Annotations == nil {
 				service.Template.Annotations = make(map[string]string)
 			}
-			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Attempt %d: Current annotations: %+v", attempt+1, service.Template.Annotations))
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempt %d: Current annotations: %+v", fullName, attempt+1, service.Template.Annotations))
 			maps.Copy(service.Template.Annotations, newAnnotations)
 		}
 
@@ -145,12 +145,12 @@ func (c *RunClient) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serv
 			if service.Template.Labels == nil {
 				service.Template.Labels = make(map[string]string)
 			}
-			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Attempt %d: Current labels: %+v", attempt+1, service.Template.Labels))
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempt %d: Current labels: %+v", fullName, attempt+1, service.Template.Labels))
 			maps.Copy(service.Template.Labels, newLabels)
 		}
 
 		fieldPaths := []string{"template.annotations", "template.labels"}
-		c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Attempting try %d: Using UpdateMask: %v", attempt+1, fieldPaths))
+		c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempting try %d: Using UpdateMask: %v", fullName, attempt+1, fieldPaths))
 
 		// Create and send update request
 		req := &runpb_v2.UpdateServiceRequest{
@@ -179,15 +179,15 @@ func (c *RunClient) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serv
 		}
 
 		// Success! Log the result and return
-		c.logger.Info(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Update successful on attempt %d/%d", attempt+1, constants.UpdateRetries))
-		c.logger.Debug(ctx, "UpdateCloudRunAnnotationsAndLabels: Update Operation completed: "+result.Name)
+		c.logger.Info(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Update successful on attempt %d/%d", fullName, attempt+1, constants.UpdateRetries))
+		c.logger.Debug(ctx, "UpdateCloudRunAnnotationsAndLabels [svc:%s]: Update Operation completed: "+result.Name)
 
 		// Verify final state
 		if len(newAnnotations) > 0 {
-			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Final annotations: %+v", service.Template.Annotations))
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Final annotations: %+v", fullName, service.Template.Annotations))
 		}
 		if len(newLabels) > 0 {
-			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels: Final labels: %+v", service.Template.Labels))
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Final labels: %+v", fullName, service.Template.Labels))
 		}
 
 		return nil
