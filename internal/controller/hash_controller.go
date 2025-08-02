@@ -11,17 +11,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// HashController provides an endpoint to get the hash for a given secret name.
+// hashController provides an endpoint to get the hash for a given secret name.
 // This is useful for users/tools to determine the label/annotation hash for a secret.
-type HashController struct {
+type hashController struct {
 	logger logger.Logger
 	config *config.Config
 }
 
 // NewHashController registers the /v1/hash endpoint for hashing secret names.
 // Usage: POST /v1/hash {"secretName": "..."} -> {"secretNameHash": "..."}
-func NewHashController(router *gin.RouterGroup, logger logger.Logger, config *config.Config) *HashController {
-	controller := &HashController{
+func NewHashController(router *gin.RouterGroup, logger logger.Logger, config *config.Config) *hashController {
+	controller := &hashController{
 		logger: logger,
 		config: config,
 	}
@@ -33,7 +33,7 @@ func NewHashController(router *gin.RouterGroup, logger logger.Logger, config *co
 // GetHash handles POST requests to /v1/hash and returns the hash for the provided secret name.
 // Request:  {"secretName": "..."}
 // Response: {"secretNameHash": "..."}
-func (h *HashController) GetHash(c *gin.Context) {
+func (h *hashController) GetHash(c *gin.Context) {
 	var hashRequest dto.HashRequest
 	if err := c.ShouldBindJSON(&hashRequest); err != nil {
 		h.logger.Error(c.Request.Context(), "Failed to bind request body error: "+err.Error())
