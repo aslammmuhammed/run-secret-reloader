@@ -74,14 +74,34 @@ func (c *RunClient) GetServicesByLabel(ctx context.Context, labelKey string) ([]
 
 	c.logger.Debug(ctx, "Using label selector: "+labelSelector)
 
-	// Call the API using Namespaces (V1) API with the provided request context
-	// This ensures proper request tracing and timeout handling
-	resp, err := c.serviceClient.Namespaces.Services.List(parent).Context(ctx).LabelSelector(labelSelector).Do()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list Cloud Run services: %w", err)
+	var services []*run.Service
+	var pageToken string
+	for {
+		// Create the list request with pagination and label selector
+		listCall := c.serviceClient.Namespaces.Services.List(parent).
+			Context(ctx).
+			LabelSelector(labelSelector)
+		// Add page token from a previous response
+		if pageToken != "" {
+			listCall = listCall.Continue(pageToken)
+		}
+		resp, err := listCall.Do()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list Cloud Run services: %w", err)
+		}
+		services = append(services, resp.Items...)
+
+		// continuation token for the next page
+		if resp.Metadata == nil || resp.Metadata.Continue == "" {
+			// No more pages
+			break
+		}
+		pageToken = resp.Metadata.Continue
+		c.logger.Debug(ctx, fmt.Sprintf("Fetching next page with token: %s", pageToken))
 	}
 
-	return resp.Items, nil
+	c.logger.Info(ctx, fmt.Sprintf("Found %d services with label %s", len(services), labelKey))
+	return services, nil
 }
 
 func (c *RunClient) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serviceV1 *run.Service, newAnnotations map[string]string, newLabels map[string]string) error {
