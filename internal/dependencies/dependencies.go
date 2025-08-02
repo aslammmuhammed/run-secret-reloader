@@ -7,7 +7,6 @@ import (
 	"github.com/aslammmuhammed/run-secret-reloader/pkg/cloudrun"
 	"github.com/aslammmuhammed/run-secret-reloader/pkg/logger"
 	"github.com/aslammmuhammed/run-secret-reloader/pkg/server"
-	"github.com/gin-gonic/gin"
 )
 
 // Service contains all dependencies for the application
@@ -19,7 +18,7 @@ type Dependencies struct {
 	// Core dependencies
 	Config         *config.Config
 	Logger         logger.Logger
-	Server         *gin.Engine
+	Server         *server.Server
 	CloudRunClient *cloudrun.RunClient
 }
 
@@ -48,4 +47,11 @@ func NewDependencies(ctx context.Context, cfg *config.Config) (*Dependencies, er
 		Server:         server,
 		CloudRunClient: cloudrunClient,
 	}, nil
+}
+
+func (d *Dependencies) Close() error {
+	if d.CloudRunClient != nil {
+		return d.CloudRunClient.Close()
+	}
+	return nil
 }

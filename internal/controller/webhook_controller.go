@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aslammmuhammed/run-secret-reloader/config"
+	"github.com/aslammmuhammed/run-secret-reloader/internal/constants"
 	"github.com/aslammmuhammed/run-secret-reloader/internal/dto"
 	appError "github.com/aslammmuhammed/run-secret-reloader/internal/errors"
 	"github.com/aslammmuhammed/run-secret-reloader/internal/usecase"
@@ -82,7 +83,7 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 		return
 	}
 	hashSecretName := utils.HashSecretName(secretName)
-	labelKey := "run_secret_reloader-" + hashSecretName // Create label to search for services using this secret
+	labelKey := constants.CloudRunLabelPrefix + hashSecretName // Create label to search for services using this secret
 
 	w.logger.Info(c.Request.Context(), "Searching for services | secretName: "+secretName+" | labelKey: "+labelKey)
 
@@ -106,13 +107,15 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 		}
 	}
 
+	// Log successful HTTP response
+	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: 200 | servicesFound: "+strconv.Itoa(len(services)))
 	// Create new annotations and labels
 	newAnnotations := map[string]string{
-		"run_secret_reloader-" + hashSecretName + "/name":    secretName,
-		"run_secret_reloader-" + hashSecretName + "/version": version,
+		constants.CloudRunLabelPrefix + hashSecretName + "/name":    secretName,
+		constants.CloudRunLabelPrefix + hashSecretName + "/version": version,
 	}
 	newLabels := map[string]string{
-		"run_secret_reloader-" + hashSecretName + "_version": version,
+		constants.CloudRunLabelPrefix + hashSecretName + "_version": version,
 	}
 
 	// Update services

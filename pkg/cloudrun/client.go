@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"time"
 
 	run_v2 "cloud.google.com/go/run/apiv2"
 	runpb_v2 "cloud.google.com/go/run/apiv2/runpb"
 	"github.com/aslammmuhammed/run-secret-reloader/config"
+	"github.com/aslammmuhammed/run-secret-reloader/internal/constants"
+	"github.com/aslammmuhammed/run-secret-reloader/internal/utils"
 	"github.com/aslammmuhammed/run-secret-reloader/pkg/logger"
 	"google.golang.org/api/option"
 	run "google.golang.org/api/run/v1"
@@ -67,95 +70,137 @@ func (c *RunClient) GetServicesByLabel(ctx context.Context, labelKey string) ([]
 		return nil, fmt.Errorf("label key is required")
 	}
 
-	// List all services across entire project (all regions)
 	parent := fmt.Sprintf("namespaces/%s", c.projectID)
-
 	labelSelector := fmt.Sprintf("%s=true", labelKey)
-
 	c.logger.Debug(ctx, "Using label selector: "+labelSelector)
 
-	// Call the API using Namespaces (V1) API with the provided request context
-	// This ensures proper request tracing and timeout handling
-	resp, err := c.serviceClient.Namespaces.Services.List(parent).Context(ctx).LabelSelector(labelSelector).Do()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list Cloud Run services: %w", err)
+	var services []*run.Service
+	var pageToken string
+	for {
+		// Create the list request with pagination and label selector
+		listCall := c.serviceClient.Namespaces.Services.List(parent).
+			Context(ctx).
+			LabelSelector(labelSelector)
+		// Add page token from a previous response
+		if pageToken != "" {
+			listCall = listCall.Continue(pageToken)
+		}
+		resp, err := listCall.Do()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list Cloud Run services: %w", err)
+		}
+		services = append(services, resp.Items...)
+
+		// continuation token for the next page
+		if resp.Metadata == nil || resp.Metadata.Continue == "" {
+			// No more pages
+			break
+		}
+		pageToken = resp.Metadata.Continue
+		c.logger.Debug(ctx, fmt.Sprintf("Fetching next page with token: %s", pageToken))
 	}
 
-	return resp.Items, nil
+	c.logger.Info(ctx, fmt.Sprintf("Found %d services with label %s", len(services), labelKey))
+	return services, nil
 }
 
 func (c *RunClient) UpdateCloudRunAnnotationsAndLabels(ctx context.Context, serviceV1 *run.Service, newAnnotations map[string]string, newLabels map[string]string) error {
-
 	serviceName := serviceV1.Metadata.Name
 	region := serviceV1.Metadata.Labels["cloud.googleapis.com/location"]
 	fullName := fmt.Sprintf("projects/%s/locations/%s/services/%s", c.projectID, region, serviceName)
-	// Fetch current service
-	c.logger.Debug(ctx, "Fetching service: "+fullName)
-	service, err := c.serviceClient_v2.GetService(ctx, &runpb_v2.GetServiceRequest{Name: fullName})
-	if err != nil {
-		return fmt.Errorf("failed to get service: %w", err)
-	}
 
-	// Initialize and update template annotations if provided
-	if len(newAnnotations) > 0 {
-		if service.Template == nil {
-			service.Template = &runpb_v2.RevisionTemplate{}
-		}
-		if service.Template.Annotations == nil {
-			service.Template.Annotations = make(map[string]string)
+	var lastErr error
+	for attempt := 0; attempt < constants.UpdateRetries; attempt++ {
+		if attempt > 0 {
+			c.logger.Info(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Retry attempt %d/%d after error: %v",fullName, attempt+1, constants.UpdateRetries, lastErr))
+			// exponential backoff
+			time.Sleep(constants.UpdateRetryDelay * time.Duration(attempt+1))
 		}
 
-		c.logger.Debug(ctx, "Template annotations before update:"+fmt.Sprintf("%+v", service.Template.Annotations))
-
-		// Apply new annotations to spec.template.annotations
-		maps.Copy(service.Template.Annotations, newAnnotations)
-	}
-
-	// Initialize and update template labels if provided
-	if len(newLabels) > 0 {
-		if service.Template == nil {
-			service.Template = &runpb_v2.RevisionTemplate{}
-		}
-		if service.Template.Labels == nil {
-			service.Template.Labels = make(map[string]string)
+		// fetch latest service state
+		c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempt %d: Fetching latest service state: %s", fullName, attempt+1, fullName))
+		service, err := c.serviceClient_v2.GetService(ctx, &runpb_v2.GetServiceRequest{Name: fullName})
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get service: %w", err)
+			continue
 		}
 
-		c.logger.Debug(ctx, "Template labels before update:"+fmt.Sprintf("%+v", service.Template.Labels))
+		// Initialize and update template annotations if provided
+		if len(newAnnotations) > 0 {
+			if service.Template == nil {
+				service.Template = &runpb_v2.RevisionTemplate{}
+			}
+			if service.Template.Annotations == nil {
+				service.Template.Annotations = make(map[string]string)
+			}
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempt %d: Current annotations: %+v", fullName, attempt+1, service.Template.Annotations))
+			maps.Copy(service.Template.Annotations, newAnnotations)
+		}
 
-		// Apply new labels to spec.template.metadata.labels
-		maps.Copy(service.Template.Labels, newLabels)
+		// Initialize and update template labels if provided
+		if len(newLabels) > 0 {
+			if service.Template == nil {
+				service.Template = &runpb_v2.RevisionTemplate{}
+			}
+			if service.Template.Labels == nil {
+				service.Template.Labels = make(map[string]string)
+			}
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempt %d: Current labels: %+v", fullName, attempt+1, service.Template.Labels))
+			maps.Copy(service.Template.Labels, newLabels)
+		}
+
+		fieldPaths := []string{"template.annotations", "template.labels"}
+		c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Attempting try %d: Using UpdateMask: %v", fullName, attempt+1, fieldPaths))
+
+		// Create and send update request
+		req := &runpb_v2.UpdateServiceRequest{
+			Service: service,
+			UpdateMask: &fieldmaskpb.FieldMask{
+				Paths: fieldPaths,
+			},
+		}
+
+		op, err := c.serviceClient_v2.UpdateService(ctx, req)
+		if err != nil {
+			if utils.IsRetryableError(err) {
+				lastErr = fmt.Errorf("retriable error on update: %w", err)
+				continue
+			}
+			return fmt.Errorf("non-retriable error on update: %w", err)
+		}
+
+		result, err := op.Wait(ctx)
+		if err != nil {
+			if utils.IsRetryableError(err) {
+				lastErr = fmt.Errorf("retriable error on wait: %w", err)
+				continue
+			}
+			return fmt.Errorf("non-retriable error on wait: %w", err)
+		}
+
+		// Success! Log the result and return
+		c.logger.Info(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Update successful on attempt %d/%d", fullName, attempt+1, constants.UpdateRetries))
+		c.logger.Debug(ctx, "UpdateCloudRunAnnotationsAndLabels [svc:%s]: Update Operation completed: "+result.Name)
+
+		// Verify final state
+		if len(newAnnotations) > 0 {
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Final annotations: %+v", fullName, service.Template.Annotations))
+		}
+		if len(newLabels) > 0 {
+			c.logger.Debug(ctx, fmt.Sprintf("UpdateCloudRunAnnotationsAndLabels [svc:%s]: Final labels: %+v", fullName, service.Template.Labels))
+		}
+
+		return nil
 	}
 
-	fieldPaths := []string{"template.annotations", "template.labels"}
+	return fmt.Errorf("failed to update service after %d attempts, last error: %v", constants.UpdateRetries, lastErr)
+}
 
-	c.logger.Debug(ctx, "Using UpdateMask:"+fmt.Sprintf("%v", fieldPaths))
-
-	// Create the update request with specific field mask for both annotations and labels
-	req := &runpb_v2.UpdateServiceRequest{
-		Service: service,
-		UpdateMask: &fieldmaskpb.FieldMask{
-			Paths: fieldPaths, // Update specific annotation and label keys
-		},
+// Close closes the v2 client connection
+// v1 doesnot make persistent connections
+func (c *RunClient) Close() error {
+	if c.serviceClient_v2 != nil {
+		return c.serviceClient_v2.Close()
 	}
-	// Trigger the update
-	op, err := c.serviceClient_v2.UpdateService(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to update service: %w", err)
-	}
-
-	// Wait for operation to complete with better error handling
-	result, err := op.Wait(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to update service: %w", err)
-	}
-
-	c.logger.Debug(ctx, "Update operation completed successfully:"+result.Name)
-	if len(newAnnotations) > 0 {
-		c.logger.Debug(ctx, "Template annotations after update:"+fmt.Sprintf("%+v", service.Template.Annotations))
-	}
-	if len(newLabels) > 0 {
-		c.logger.Debug(ctx, "Template labels after update:"+fmt.Sprintf("%+v", service.Template.Labels))
-	}
-
 	return nil
 }
