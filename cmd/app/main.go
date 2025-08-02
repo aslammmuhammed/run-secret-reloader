@@ -1,7 +1,12 @@
 package main
 
-import "github.com/aslammmuhammed/run-secret-reloader/internal/app"
+import (
+	"os"
+
+	"github.com/aslammmuhammed/run-secret-reloader/internal/app"
+)
 
 func main() {
-	app.Run()
+	exitCode := app.Run()
+	os.Exit(exitCode)
 }
