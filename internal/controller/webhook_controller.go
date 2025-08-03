@@ -69,13 +69,6 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 
 	w.logger.Info(c.Request.Context(), "Processing event that requires service reload | eventType: "+secretAttrs.EventType+" | description: "+eventDescription)
 
-	// Decode base64 data if needed (for future use)
-	// if pubsubReq.Message.Data != "" {
-	// 	if decodedData, err := base64.StdEncoding.DecodeString(pubsubReq.Message.Data); err == nil {
-	// 		w.logger.Info(c.Request.Context(), "Decoded message data | dataLength: "+strconv.Itoa(len(decodedData)))
-	// 	}
-	// }
-
 	// Extract secret name from secretId
 	secretName, version, err := utils.ExtractSecretNameAndVersionFromVersionID(secretAttrs.VersionID)
 	if err != nil {
@@ -119,7 +112,7 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 	}
 
 	// Update services
-	updatedServices, failedUpdates := w.webhookUsecase.UpdateCloudRunServices(c.Request.Context(), services, newAnnotations, newLabels)
+	updatedServices, failedUpdates, skippedServices := w.webhookUsecase.UpdateCloudRunServices(c.Request.Context(), services, newAnnotations, newLabels, version, constants.CloudRunLabelPrefix+hashSecretName+"/version")
 
 	// Log HTTP response
 	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: 200 | servicesFound: "+strconv.Itoa(len(services))+" | servicesUpdated: "+strconv.Itoa(len(updatedServices))+" | servicesFailed: "+strconv.Itoa(len(failedUpdates)))
@@ -127,6 +120,10 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 	var failedUpdateNames []string
 	for _, service := range failedUpdates {
 		failedUpdateNames = append(failedUpdateNames, service.Metadata.Name)
+	}
+	var skippedUpdateNames []string
+	for _, service := range skippedServices {
+		skippedUpdateNames = append(skippedUpdateNames, service.Metadata.Name)
 	}
 	var message string
 	if len(updatedServices) > 0 {
@@ -143,6 +140,7 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 		ServicesFound: len(serviceNames),
 		ServiceNames:  serviceNames,
 		FailedUpdates: failedUpdateNames,
+		SkippedUpdates: skippedUpdateNames,
 	}
 
 	c.JSON(http.StatusOK, response)

@@ -34,12 +34,25 @@ func (u *WebhookUsecase) GetServicesByLabel(ctx context.Context, labelKey string
 	return services, nil
 }
 
-func (u *WebhookUsecase) UpdateCloudRunServices(ctx context.Context, services []*run.Service, newAnnotations map[string]string, newLabels map[string]string) ([]*run.Service, []*run.Service) {
+func (u *WebhookUsecase) UpdateCloudRunServices(ctx context.Context, services []*run.Service, newAnnotations map[string]string, newLabels map[string]string, newVersion string, versionAnnotationKey string) ([]*run.Service, []*run.Service, []*run.Service) {
 	var wg sync.WaitGroup
 	succeededChan := make(chan *run.Service, len(services))
 	failedChan := make(chan *run.Service, len(services))
+	skippedChan := make(chan *run.Service, len(services))
 
 	for _, service := range services {
+		// Skip if current version >= new version
+		u.log.Info(ctx, "Checking if service "+service.Metadata.Name+" is up to date , oldVersion: "+service.Spec.Template.Metadata.Annotations[versionAnnotationKey]+" newVersion: "+newVersion)
+		if oldVersion, ok := service.Spec.Template.Metadata.Annotations[versionAnnotationKey]; ok {
+			oldVersionInt, _ := strconv.Atoi(oldVersion)
+			newVersionInt, _ := strconv.Atoi(newVersion)
+			if oldVersionInt >= newVersionInt {
+				u.log.Info(ctx, "Skipping service "+service.Metadata.Name+" – current version "+oldVersion+">= incoming version "+newVersion)
+				skippedChan <- service
+				continue
+			}
+		}
+
 		wg.Add(1)
 		go func(s *run.Service) {
 			defer wg.Done()
@@ -57,7 +70,7 @@ func (u *WebhookUsecase) UpdateCloudRunServices(ctx context.Context, services []
 	wg.Wait()
 	close(succeededChan)
 	close(failedChan)
-
+	close(skippedChan)
 	var succeeded []*run.Service
 	for s := range succeededChan {
 		succeeded = append(succeeded, s)
@@ -68,7 +81,12 @@ func (u *WebhookUsecase) UpdateCloudRunServices(ctx context.Context, services []
 		failed = append(failed, f)
 	}
 
-	u.log.Info(ctx, "Finished updating services. Succeeded: "+strconv.Itoa(len(succeeded))+" Failed: "+strconv.Itoa(len(failed)))
+	var skipped []*run.Service
+	for s := range skippedChan {
+		skipped = append(skipped, s)
+	}
 
-	return succeeded, failed
+	u.log.Info(ctx, "Finished updating services. Succeeded: "+strconv.Itoa(len(succeeded))+" Failed: "+strconv.Itoa(len(failed))+" Skipped: "+strconv.Itoa(len(skipped)))
+
+	return succeeded, failed, skipped
 }
