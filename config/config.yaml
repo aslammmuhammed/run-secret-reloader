@@ -1,0 +1,29 @@
+http:
+  port: "8080"
+  allowed_methods:
+    - "GET"
+    - "POST"
+  allowed_headers:
+    - Origin
+    - Content-Type
+    - Accept
+    - Authorization
+  expose_headers:
+    - "*"
+  allow_credentials: true
+logger:
+  log_level: "debug"
+  log_format: "json"
+gcp:
+  project_id: ""
+  credentials_file: ""
+alert:
+  provider: "slack"
+  slack:
+    webhook_url: ""
+
+
+
+
+
+
