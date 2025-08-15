@@ -28,6 +28,6 @@ func initializeV1Routers(ctx context.Context, server *gin.RouterGroup, svc *depe
 	NewHashController(hashRouterGroup, svc.Logger, svc.Config)
 	webhookRouterGroup := server.Group("/webhook")
 	webhookRepo := cloudrun.NewCloudRunRepository(svc.CloudRunClient, ctx, svc.Config.ProjectID)
-	webhookUsecase := usecase.NewWebhookUsecase(webhookRepo, svc.Logger)
+	webhookUsecase := usecase.NewWebhookUsecase(webhookRepo, svc.Logger, svc.Alert)
 	NewWebhookController(webhookRouterGroup, svc.Logger, svc.Config, webhookUsecase)
 }

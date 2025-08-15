@@ -14,6 +14,7 @@ type (
 		HTTP   `yaml:"http"`
 		Logger `yaml:"logger"`
 		GCP    `yaml:"gcp"`
+		Alert  `yaml:"alert"`
 	}
 
 	// HTTP -.
@@ -35,6 +36,17 @@ type (
 	GCP struct {
 		ProjectID       string  `env-required:"true" yaml:"project_id" env:"GOOGLE_CLOUD_PROJECT_ID"`
 		CredentialsFile *string `yaml:"credentials_file,omitempty" env:"GOOGLE_APPLICATION_CREDENTIALS"`
+	}
+
+	// Alert -.
+	Alert struct {
+		Provider string `yaml:"provider" env:"ALERT_PROVIDER"`
+		Slack    `yaml:"slack"`
+	}
+
+	// Slack -.
+	Slack struct {
+		WebhookURL string `yaml:"webhook_url" env:"SLACK_WEBHOOK_URL"`
 	}
 )
 
