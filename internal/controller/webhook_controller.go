@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/aslammmuhammed/run-secret-reloader/config"
-	"github.com/aslammmuhammed/run-secret-reloader/internal/constants"
 	"github.com/aslammmuhammed/run-secret-reloader/internal/dto"
 	appError "github.com/aslammmuhammed/run-secret-reloader/internal/errors"
 	"github.com/aslammmuhammed/run-secret-reloader/internal/usecase"
@@ -15,26 +14,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type WebhookController struct {
+type webhookController struct {
 	webhookUsecase *usecase.WebhookUsecase
 	logger         logger.Logger
 	config         *config.Config
 }
 
-func NewWebhookController(router *gin.RouterGroup, logger logger.Logger, cfg *config.Config, webhookUsecase *usecase.WebhookUsecase) *WebhookController {
-	controller := &WebhookController{
+func NewWebhookController(router *gin.RouterGroup, logger logger.Logger, cfg *config.Config, webhookUsecase *usecase.WebhookUsecase) *webhookController {
+	controller := &webhookController{
 		webhookUsecase: webhookUsecase,
 		logger:         logger,
 		config:         cfg,
 	}
 
 	// Register routes
-	router.POST("", controller.ProcessWebhook)
+	router.POST("", controller.processWebhook)
 
 	return controller
 }
 
-func (w *WebhookController) ProcessWebhook(c *gin.Context) {
+func (w *webhookController) processWebhook(c *gin.Context) {
 
 	w.logger.Info(c.Request.Context(), "HTTP request received on endpoint: /webhook | method: POST")
 
@@ -69,78 +68,34 @@ func (w *WebhookController) ProcessWebhook(c *gin.Context) {
 
 	w.logger.Info(c.Request.Context(), "Processing event that requires service reload | eventType: "+secretAttrs.EventType+" | description: "+eventDescription)
 
-	// Extract secret name from secretId
-	secretName, version, err := utils.ExtractSecretNameAndVersionFromVersionID(secretAttrs.VersionID)
+	updatedNames, failedNames, skippedNames, err := w.webhookUsecase.ProcessSecretEvent(c.Request.Context(), secretAttrs)
 	if err != nil {
 		HandleError(c, w.logger, err)
 		return
 	}
-	hashSecretName := utils.HashSecretName(secretName)
-	labelKey := constants.CloudRunLabelPrefix + hashSecretName // Create label to search for services using this secret
-
-	w.logger.Info(c.Request.Context(), "Searching for services | secretName: "+secretName+" | labelKey: "+labelKey)
-
-	// Find services that use this secret
-	services, err := w.webhookUsecase.GetServicesByLabel(c.Request.Context(), labelKey)
-	if err != nil {
-		HandleError(c, w.logger, err)
-		return
-	}
-
-	// Log service names found and collect for response
-	var serviceNames []string
-	if len(services) > 0 {
-		for i, service := range services {
-			serviceName := "unknown"
-			if service.Metadata != nil && service.Metadata.Name != "" {
-				serviceName = service.Metadata.Name
-				serviceNames = append(serviceNames, serviceName)
-			}
-			w.logger.Info(c.Request.Context(), "Service found | index: "+strconv.Itoa(i+1)+" | serviceName: "+serviceName+" | labelKey: "+labelKey)
-		}
-	}
-
-	// Log successful HTTP response
-	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: 200 | servicesFound: "+strconv.Itoa(len(services)))
-	// Create new annotations and labels
-	newAnnotations := map[string]string{
-		constants.CloudRunLabelPrefix + hashSecretName + "/name":    secretName,
-		constants.CloudRunLabelPrefix + hashSecretName + "/version": version,
-	}
-	newLabels := map[string]string{
-		constants.CloudRunLabelPrefix + hashSecretName + "_version": version,
-	}
-
-	// Update services
-	updatedServices, failedUpdates, skippedServices := w.webhookUsecase.UpdateCloudRunServices(c.Request.Context(), services, newAnnotations, newLabels, version, constants.CloudRunLabelPrefix+hashSecretName+"/version")
 
 	// Log HTTP response
-	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: 200 | servicesFound: "+strconv.Itoa(len(services))+" | servicesUpdated: "+strconv.Itoa(len(updatedServices))+" | servicesFailed: "+strconv.Itoa(len(failedUpdates)))
+	allNames := append(append(updatedNames, failedNames...), skippedNames...)
+	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: "+strconv.Itoa(http.StatusOK)+" | servicesFound: "+strconv.Itoa(len(allNames))+" | servicesUpdated: "+strconv.Itoa(len(updatedNames))+" | servicesFailed: "+strconv.Itoa(len(failedNames))+" | servicesSkipped: "+strconv.Itoa(len(skippedNames)))
 
-	var failedUpdateNames []string
-	for _, service := range failedUpdates {
-		failedUpdateNames = append(failedUpdateNames, service.Metadata.Name)
-	}
-	var skippedUpdateNames []string
-	for _, service := range skippedServices {
-		skippedUpdateNames = append(skippedUpdateNames, service.Metadata.Name)
-	}
 	var message string
-	if len(updatedServices) > 0 {
-		message = "Webhook processed successfully. Services updated: " + strconv.Itoa(len(updatedServices))
+	if len(updatedNames) > 0 {
+		message = "Webhook processed successfully. Services updated: " + strconv.Itoa(len(updatedNames))
+	} else if len(skippedNames) > 0 {
+		message = "Webhook processed successfully. No services required an update."
 	} else {
-		message = "Webhook processing failed. Services failed to update: " + strconv.Itoa(len(failedUpdates))
+		message = "Webhook processing failed. Services failed to update: " + strconv.Itoa(len(failedNames))
 	}
 
 	// Return structured response
 	response := dto.WebhookResponse{
-		Message:       message,
-		TraceID:       logger.GetTraceIDFromContext(c.Request.Context()),
-		ProcessedAt:   time.Now().UTC().Format(time.RFC3339),
-		ServicesFound: len(serviceNames),
-		ServiceNames:  serviceNames,
-		FailedUpdates: failedUpdateNames,
-		SkippedUpdates: skippedUpdateNames,
+		Message:        message,
+		TraceID:        logger.GetTraceIDFromContext(c.Request.Context()),
+		ProcessedAt:    time.Now().UTC().Format(time.RFC3339),
+		ServicesFound:  len(allNames),
+		ServiceNames:   allNames,
+		FailedUpdates:  failedNames,
+		SkippedUpdates: skippedNames,
 	}
 
 	c.JSON(http.StatusOK, response)
