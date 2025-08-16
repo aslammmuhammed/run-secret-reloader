@@ -31,7 +31,7 @@ Cloud Run has built-in [secret hot-reload capabilities](https://cloud.google.com
 - Automatic redeployments triggered by Secret Manager events
 - Works with existing applications using `os.Getenv()`
 - Label-based targeting ensures only dependent services reload
-- Mount each secret as a volume to make it available to the container as files. Reading a volume always fetches the secret value from Secret Manager, so it can be used with the latest version.
+- Both volume mounting and secret injection methods work with Cloud Run's secret management. When using 'latest' version (instead of pinned version numbers), Cloud Run automatically fetches the newest secret value.
 
 ## 🚀 Quick Start
 
@@ -39,13 +39,7 @@ Cloud Run has built-in [secret hot-reload capabilities](https://cloud.google.com
 
 → **[See complete deployment guide](./terraform/README.md)**
 
-### 2. Update Your Secret
-
-```bash
-echo -n "new-password-value" | gcloud secrets versions add user-service-env --data-file=-
-```
-
-### 3. Label Your Services
+### 2. Label Your Services
 
 Add the label to services that should reload when secrets change:
 
@@ -60,6 +54,12 @@ SECRET_NAME_HASH=$(curl -X POST https://YOUR_RELOADER_URL/v1/hash \
 
 # To turn off the reloader, set the label to false
 "run_secret_reloader-${SECRET_NAME_HASH}=false"
+```
+
+### 3. Update Your Secret
+
+```bash
+echo -n "new-password-value" | gcloud secrets versions add user-service-env --data-file=-
 ```
 
 🎉 **That's it!** Your Cloud Run service will automatically redeploy with the new secret.
@@ -96,7 +96,7 @@ GET /health
 
 ## 🏗️ Architecture & Technical Details
 
-### Error Handling & Retries
+### Error Handling & Retries in Cloud Run Redeployment
 
 - **Retryable errors**: `ABORTED`, `OUT_OF_RANGE`, `FAILED_PRECONDITION`
 - **Max retries**: 3 attempts with exponential backoff
@@ -112,14 +112,14 @@ GET /health
 
 ### Label and Annotation Schema
 
-**Service Labels** (for targeting):
+**Service Labels** (for targeting, manually added by user):
 - `run_secret_reloader-<hash>=true` (where `<hash>` is MD5 of secret name)
 
-**Template Annotations** (for tracking):
+**Template Annotations** (for tracking, automatically managed by application):
 - `run_secret_reloader-<hash>/name` → secret name
 - `run_secret_reloader-<hash>/version` → secret version
 
-**Template Labels** (for tracking):
+**Template Labels** (for tracking, automatically managed by application):
 - `run_secret_reloader-<hash>_version` → secret version
 
 ### Project Structure
