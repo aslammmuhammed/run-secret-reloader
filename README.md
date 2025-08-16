@@ -6,7 +6,7 @@
 
 **Automatically redeploy Cloud Run services when secrets change in Google Secret Manager.**
 
-Stop manual redeployments and let your services automatically pick up fresh secrets! This service listens for Secret Manager events and intelligently reloads only the Cloud Run services that depend on the updated secret. This project addresses the feature request [Cloud Run Services should support automatically deploying a new version when a secret they depend on changes](https://issuetracker.google.com/issues/197954279).
+Tired of manual redeployments when secrets change? This service automatically redeploys your Cloud Run services when their secrets are updated in Secret Manager. Built to address a highly requested feature - [automatic redeployment of Cloud Run services when dependent secrets change](https://issuetracker.google.com/issues/197954279).
 
 ## ✨ Features
 
@@ -116,7 +116,7 @@ GET /health
 - `run_secret_reloader-<secret_name_hash>=true` (where `<secret_name_hash>` is MD5 of secret name)
 
 **Template Annotations** (for tracking, automatically managed by application):
-- `run_secret_reloader-<secret_name_hash>/name` → secret name [Helps the secret name to be readable from secret_name_hash]
+- `run_secret_reloader-<secret_name_hash>/name` → Maps hash back to original secret name for better readability
 - `run_secret_reloader-<secret_name_hash>/version` → secret version
 
 **Template Labels** (for tracking, automatically managed by application):
