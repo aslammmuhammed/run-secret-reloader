@@ -44,7 +44,7 @@ func (u *WebhookUsecase) ProcessSecretEvent(ctx context.Context, secretAttrs dto
 	// 3. Prepare annotations and labels
 	versionAnnotationKey := constants.CloudRunLabelPrefix + hashSecretName + "/version"
 	newAnnotations := map[string]string{
-		constants.CloudRunLabelPrefix + hashSecretName + "/name": versionAnnotationKey,
+		constants.CloudRunLabelPrefix + hashSecretName + "/name": secretName,
 		versionAnnotationKey: version,
 	}
 	newLabels := map[string]string{
@@ -59,15 +59,15 @@ func (u *WebhookUsecase) ProcessSecretEvent(ctx context.Context, secretAttrs dto
 
 	// 5. Send alert
 	if u.alert != nil {
-	u.alert.SendMessage(ctx, alert.Message{
-		SecretName: secretName,
-		NewVersion: version,
-		TraceID:    logger.GetTraceIDFromContext(ctx),
-		Succeeded:  updatedNames,
-		Failed:     failedNames,
-		Skipped:    skippedNames,
+		u.alert.SendMessage(ctx, alert.Message{
+			SecretName: secretName,
+			NewVersion: version,
+			TraceID:    logger.GetTraceIDFromContext(ctx),
+			Succeeded:  updatedNames,
+			Failed:     failedNames,
+			Skipped:    skippedNames,
 		})
-	}else{
+	} else {
 		u.log.Info(ctx, "Alert client is not set, skipping alert")
 	}
 	return updatedNames, failedNames, skippedNames, nil
