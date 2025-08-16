@@ -6,7 +6,7 @@
 
 **Automatically redeploy Cloud Run services when secrets change in Google Secret Manager.**
 
-Stop manual redeployments and let your services automatically pick up fresh secrets! This service listens for Secret Manager events and intelligently reloads only the Cloud Run services that depend on the updated secret.
+Stop manual redeployments and let your services automatically pick up fresh secrets! This service listens for Secret Manager events and intelligently reloads only the Cloud Run services that depend on the updated secret. This project addresses the feature request [Cloud Run Services should support automatically deploying a new version when a secret they depend on changes](https://issuetracker.google.com/issues/197954279).
 
 ## ✨ Features
 
@@ -31,7 +31,7 @@ Cloud Run has built-in [secret hot-reload capabilities](https://cloud.google.com
 - Automatic redeployments triggered by Secret Manager events
 - Works with existing applications using `os.Getenv()`
 - Label-based targeting ensures only dependent services reload
-- Both volume mounting and secret injection methods work with Cloud Run's secret management. When using 'latest' version (instead of pinned version numbers), Cloud Run automatically fetches the newest secret value.
+- Both volume mounting and secret injection methods work with this secret reloader when using 'latest' version (instead of pinned version numbers), Cloud Run automatically fetches the newest secret value when a new revision is deployed.
 
 ## 🚀 Quick Start
 
@@ -113,14 +113,14 @@ GET /health
 ### Label and Annotation Schema
 
 **Service Labels** (for targeting, manually added by user):
-- `run_secret_reloader-<hash>=true` (where `<hash>` is MD5 of secret name)
+- `run_secret_reloader-<secret_name_hash>=true` (where `<secret_name_hash>` is MD5 of secret name)
 
 **Template Annotations** (for tracking, automatically managed by application):
-- `run_secret_reloader-<hash>/name` → secret name
-- `run_secret_reloader-<hash>/version` → secret version
+- `run_secret_reloader-<secret_name_hash>/name` → secret name [Helps the secret name to be readable from secret_name_hash]
+- `run_secret_reloader-<secret_name_hash>/version` → secret version
 
 **Template Labels** (for tracking, automatically managed by application):
-- `run_secret_reloader-<hash>_version` → secret version
+- `run_secret_reloader-<secret_name_hash>_version` → secret version
 
 ### Project Structure
 
@@ -129,7 +129,7 @@ cmd/app/                – program entrypoint
 internal/               – application code
   app/                  – application initialization
   controller/           – HTTP handlers (webhook, health, hash)
-  usecase/              – business logic (webhook processing)
+  usecase/              – application logic (webhook processing)
   repo/                 – Cloud Run API client implementations
   dto/                  – data transfer objects
   utils/                – helpers (events, retry, secrets)
