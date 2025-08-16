@@ -47,7 +47,7 @@ resource "google_cloud_run_v2_service" "reloader" {
 
   template {
     service_account = google_service_account.reloader.email
-    timeout = "900s"
+    timeout = "600s"
     containers {
       image = var.cloud_run_image
       resources {
@@ -104,6 +104,10 @@ resource "google_cloud_run_v2_service" "reloader" {
     max_instance_request_concurrency = 50
   }
 
+  lifecycle {
+    prevent_destroy = false
+  }
+
 }
 
 # Pub/Sub topic for secret updates
@@ -117,7 +121,7 @@ resource "google_pubsub_subscription" "push" {
   name  = var.subscription_name
   topic = google_pubsub_topic.topic.name
 
-  ack_deadline_seconds = 900
+  ack_deadline_seconds = 600
 
   push_config {
     push_endpoint = "${google_cloud_run_v2_service.reloader.uri}${var.push_endpoint_path}"
@@ -128,14 +132,3 @@ resource "google_pubsub_subscription" "push" {
   }
 }
 
-output "cloud_run_url" {
-  value = google_cloud_run_v2_service.reloader.uri
-}
-
-output "pubsub_topic" {
-  value = google_pubsub_topic.topic.name
-}
-
-output "pubsub_subscription" {
-  value = google_pubsub_subscription.push.name
-}

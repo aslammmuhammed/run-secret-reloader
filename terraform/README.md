@@ -1,19 +1,6 @@
-# 🚀 Terraform Deployment
+# 🚀 Run Secret Reloader - Terraform Module
 
-This directory contains the Terraform module for deploying Run Secret Reloader to Google Cloud Platform.
-
-## 📋 Prerequisites
-
-- Google Cloud Project with billing enabled
-- Terraform >= 1.0
-- `gcloud` CLI configured and authenticated
-- Required APIs enabled:
-  ```bash
-  gcloud services enable run.googleapis.com
-  gcloud services enable pubsub.googleapis.com
-  gcloud services enable secretmanager.googleapis.com
-  gcloud services enable cloudbuild.googleapis.com
-  ```
+This is the core Terraform module for deploying Run Secret Reloader to Google Cloud Platform. It automatically redeploys Cloud Run services when secrets change in Google Secret Manager.
 
 ## 🏗️ What Gets Created
 
@@ -23,6 +10,7 @@ The Terraform module provisions:
 - **Service Account** with required permissions:
   - `roles/run.admin` - To update Cloud Run services
   - `roles/iam.serviceAccountUser` - To manage service accounts
+  - `roles/secretmanager.secretAccessor` - To access Slack webhook URL secret
 - **Pub/Sub topic** for receiving Secret Manager events
 - **Push subscription** with OIDC authentication to Cloud Run service
 - **IAM bindings** for secure service-to-service communication
@@ -33,19 +21,34 @@ The Terraform module provisions:
 
 ```hcl
 module "reloader" {
-  source     = "github.com/aslammmuhammed/run-secret-reloader//terraform/modules/reloader"
+  source     = "github.com/aslammmuhammed/run-secret-reloader/terraform/modules/reloader"
   project_id = "your-gcp-project-id"
   
+  # Slack alerts with Trace ID for debugging 
   slack_webhook_url_secret_id      = "slack-webhook-url"
   slack_webhook_url_secret_version = "latest"
 }
 ```
 
-### 2. Advanced Configuration
+### 2. Local Module Usage
 
 ```hcl
 module "reloader" {
-  source     = "github.com/aslammmuhammed/run-secret-reloader//terraform/modules/reloader"
+  source                           = "./terraform/modules/reloader"
+  project_id                       = "your-project-id"
+  cloud_run_image                  = "keyzersoze/run-secret-reloader:v0.1.0"
+  
+  # Slack alerts with Trace ID for debugging 
+  slack_webhook_url_secret_id      = "slack-webhook-url"
+  slack_webhook_url_secret_version = "latest"
+}
+```
+
+### 3. Advanced Configuration
+
+```hcl
+module "reloader" {
+  source     = "github.com/aslammmuhammed/run-secret-reloader/terraform/modules/reloader"
   project_id = "your-gcp-project-id"
   region     = "us-central1"
   
@@ -61,10 +64,14 @@ module "reloader" {
   
   # Service account
   service_account_name = "reloader-sa"
+  
+  # Slack configuration
+  slack_webhook_url_secret_id      = "slack-webhook-url"
+  slack_webhook_url_secret_version = "latest"
 }
 ```
 
-### 3. Deploy
+### 4. Deploy
 
 ```bash
 # Initialize Terraform
@@ -83,7 +90,6 @@ terraform apply
 |----------|------|-------------|---------|----------|
 | `project_id` | `string` | GCP project ID | - | ✅ |
 | `region` | `string` | GCP region for Cloud Run | `us-central1` | ❌ |
-| `secrets` | `list(string)` | List of secret names to monitor | - | ✅ |
 | `topic_name` | `string` | Pub/Sub topic name | `run-secret-reloader` | ❌ |
 | `subscription_name` | `string` | Pub/Sub subscription name | `run-secret-reloader-push` | ❌ |
 | `cloud_run_service_name` | `string` | Cloud Run service name | `run-secret-reloader` | ❌ |
@@ -92,6 +98,10 @@ terraform apply
 | `cloud_run_cpu` | `string` | CPU limit | `1` | ❌ |
 | `push_endpoint_path` | `string` | Webhook endpoint path | `/v1/webhook` | ❌ |
 | `service_account_name` | `string` | Service account name | `run-secret-reloader-sa` | ❌ |
+| `slack_webhook_url_secret_id` | `string` | Secret ID for Slack webhook URL | - | ✅ |
+| `slack_webhook_url_secret_version` | `string` | Secret version for Slack webhook URL | - | ✅ |
+
+> **Note:** Alerts are optional in the application but currently required by this terraform module. Alerts include a **Trace ID** for easy debugging. To disable alerts, leave the webhook secret empty.
 
 ## 📤 Module Outputs
 
@@ -108,11 +118,8 @@ terraform apply
 After deployment, configure your secrets to publish events to the created topic:
 
 ```bash
-# Get the topic name from Terraform output
-TOPIC_NAME=$(terraform output -raw pubsub_topic)
-
 # For each secret that should trigger reloads
-gcloud secrets update SECRET_NAME \
+gcloud secrets update user-service-env \
   --add-topics=projects/YOUR_PROJECT_ID/topics/${TOPIC_NAME}
 ```
 
@@ -121,13 +128,13 @@ gcloud secrets update SECRET_NAME \
 For any Cloud Run service that should reload when secrets change:
 
 ```bash
-# Get the reloader service URL
-RELOADER_URL=$(terraform output -raw cloud_run_url)
+# Get the reloader cloudrun URL
+RELOADER_CLOUDRUN_URL=$(terraform output -raw cloud_run_url)
 
-# Get the hash for your secret name
-SECRET_HASH=$(curl -X POST ${RELOADER_URL}/v1/hash \
+# Get the secret name hash for your secret name
+SECRET_HASH=$(curl -X POST ${RELOADER_CLOUDRUN_URL}/v1/hash \
   -H "Content-Type: application/json" \
-  -d '{"secretName": "db-password"}' | jq -r '.secretNameHash')
+  -d '{"secretName": "user-service-env"}' | jq -r '.secretNameHash')
 
 # Add the label to your service
 gcloud run services update YOUR_SERVICE_NAME \
@@ -141,66 +148,20 @@ gcloud run services update YOUR_SERVICE_NAME \
 
 ```bash
 # Check if the service is running
-RELOADER_URL=$(terraform output -raw cloud_run_url)
-curl ${RELOADER_URL}/health
+RELOADER_CLOUDRUN_URL=$(terraform output -raw cloud_run_url)
+curl ${RELOADER_CLOUDRUN_URL}/health
 
 # Test the hash endpoint
-curl -X POST ${RELOADER_URL}/v1/hash \
+curl -X POST ${RELOADER_CLOUDRUN_URL}/v1/hash \
   -H "Content-Type: application/json" \
-  -d '{"secretName": "test-secret"}'
+  -d '{"secretName": "user-service-env"}'
 ```
 
-### Monitor Logs
 
-```bash
-gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=run-secret-reloader" \
-  --project=YOUR_PROJECT_ID \
-  --limit=20
-```
-
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-**1. Permission Denied Errors**
-```bash
-# Ensure APIs are enabled
-gcloud services enable run.googleapis.com pubsub.googleapis.com secretmanager.googleapis.com
-
-# Check your authentication
-gcloud auth list
-gcloud auth application-default login
-```
-
-**2. Service Account Issues**
-```bash
-# Verify service account permissions
-gcloud projects get-iam-policy YOUR_PROJECT_ID \
-  --filter="bindings.members:serviceAccount:run-secret-reloader-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com"
-```
-
-**3. Pub/Sub Subscription Errors**
-```bash
-# Check if subscription exists and is configured correctly
-gcloud pubsub subscriptions describe run-secret-reloader-push
-```
 
 ## 📚 Additional Resources
 
 - [Secret Manager Event Notifications](https://cloud.google.com/secret-manager/docs/event-notifications)
 - [Cloud Run IAM Roles](https://cloud.google.com/run/docs/reference/iam/roles)
 - [Pub/Sub Push Subscriptions](https://cloud.google.com/pubsub/docs/push)
-
-## 🔄 Cleanup
-
-To remove all created resources:
-
-```bash
-terraform destroy
-```
-
-**Note**: This will delete the Cloud Run service, Pub/Sub resources, and service account. Make sure to remove the topic references from your secrets first:
-
-```bash
-gcloud secrets update SECRET_NAME --clear-topics
-```
+- [Main Project Documentation](../README.md)
