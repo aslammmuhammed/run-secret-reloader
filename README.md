@@ -19,6 +19,21 @@ Stop manual redeployments and let your services automatically pick up fresh secr
 - 🌐 **Multi-service Support** - Handle multiple Cloud Run services per secret
 - ☁️ **Serverless** - Runs as a Cloud Run service, scales to zero when idle
 
+🎉 **That's it!** Your Cloud Run service will automatically redeploy with the new secret.
+
+Cloud Run has built-in [secret hot-reload capabilities](https://medium.com/google-cloud/cloud-run-hot-reload-your-secret-manager-secrets-ff2c502df666), but most applications read secrets only once at startup. This project bridges that gap by automatically triggering redeployments when secrets change.
+
+**The Problem:**
+- Environment variables are read once at startup
+- File mounts fetch fresh values, but apps cache secrets in memory
+- Manual redeployments are error-prone and slow
+
+**The Solution:**
+- Automatic redeployments triggered by Secret Manager events
+- Works with existing applications using `os.Getenv()`
+- Label-based targeting ensures only dependent services reload
+- Mount each secret as a volume to make it available to the container as files. Reading a volume always fetches the secret value from Secret Manager, so it can be used with the latest version.
+
 ## 🚀 Quick Start
 
 ### 1. Deploy with Terraform
@@ -48,21 +63,6 @@ SECRET_NAME_HASH=$(curl -X POST https://YOUR_RELOADER_URL/v1/hash \
 "run_secret_reloader-${SECRET_NAME_HASH}=false"
 ```
 
-🎉 **That's it!** Your Cloud Run service will automatically redeploy with the new secret.
-
-Cloud Run has built-in [secret hot-reload capabilities](https://medium.com/google-cloud/cloud-run-hot-reload-your-secret-manager-secrets-ff2c502df666), but most applications read secrets only once at startup. This project bridges that gap by automatically triggering redeployments when secrets change.
-
-**The Problem:**
-- Environment variables are read once at startup
-- File mounts fetch fresh values, but apps cache secrets in memory
-- Manual redeployments are error-prone and slow
-
-**The Solution:**
-- Automatic redeployments triggered by Secret Manager events
-- Works with existing applications using `os.Getenv()`
-- Label-based targeting ensures only dependent services reload
-- Mount each secret as a volume to make it available to the container as files. Reading a volume always fetches the secret value from Secret Manager, so it can be used with the latest version.
-
 ## 🛠️ API Reference
 
 ### Hash Endpoint
@@ -85,6 +85,12 @@ POST /v1/hash
 
 ```bash
 POST /v1/webhook
+```
+
+### Health Endpoint
+
+```bash
+GET /health
 ```
 
 ## 🏗️ Architecture & Technical Details
@@ -139,6 +145,12 @@ config/                 – runtime configuration
 terraform/              – infrastructure as code
 ```
 
+## ⚠️ Current Limitations
+
+1. **Traffic Splitting**: Not handled. Only the latest traffic-serving revision is updated to the new revision. Old traffic-serving revisions remain the same and are not restarted.
+
+2. **Multi-Region Support**: Currently not supported, but coming soon 🚀.
+
 ## 📜 License
 
 Apache License 2.0 © 2025 Aslam Muhammed
@@ -146,9 +158,3 @@ Apache License 2.0 © 2025 Aslam Muhammed
 ---
 
 Built with ❤️ for the Google Cloud community
-
-## ⚠️ Current Limitations
-
-1. **Traffic Splitting**: Not handled. Only the latest traffic-serving revision is updated to the new revision. Old traffic-serving revisions remain the same and are not restarted.
-
-2. **Multi-Region Support**: Currently not supported, but coming soon.
