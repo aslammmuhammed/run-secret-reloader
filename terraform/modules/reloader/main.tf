@@ -83,16 +83,20 @@ resource "google_cloud_run_v2_service" "reloader" {
         name  = "GOOGLE_CLOUD_PROJECT_ID"
         value = var.project_id
       }
-
-      env {
-        name = "SLACK_WEBHOOK_URL"
-        value_source {
-          secret_key_ref {
-            secret  = var.slack_webhook_url_secret_id
-            version = var.slack_webhook_url_secret_version
+      
+      dynamic "env" {
+        for_each = var.slack_webhook_url_secret_id != "" ? [1] : []
+        content {
+          name = "SLACK_WEBHOOK_URL"
+          value_source {
+            secret_key_ref {
+              secret  = var.slack_webhook_url_secret_id
+              version = var.slack_webhook_url_secret_version
+            }
           }
         }
       }
+
       ports {
         container_port = 8080
       }

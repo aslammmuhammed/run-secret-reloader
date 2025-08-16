@@ -8,9 +8,9 @@ The Terraform module provisions:
 
 - **Cloud Run v2 service** with health checks and auto-scaling (0-5 instances)
 - **Service Account** with required permissions:
-  - `roles/run.admin` - To update Cloud Run services
-  - `roles/iam.serviceAccountUser` - To manage service accounts
-  - `roles/secretmanager.secretAccessor` - To access Slack webhook URL secret
+  - `roles/run.admin`
+  - `roles/iam.serviceAccountUser`
+  - `roles/secretmanager.secretAccessor`
 - **Pub/Sub topic** for receiving Secret Manager events
 - **Push subscription** with OIDC authentication to Cloud Run service
 - **IAM bindings** for secure service-to-service communication
@@ -101,7 +101,7 @@ terraform apply
 | `slack_webhook_url_secret_id` | `string` | Secret ID for Slack webhook URL | - | ✅ |
 | `slack_webhook_url_secret_version` | `string` | Secret version for Slack webhook URL | - | ✅ |
 
-> **Note:** Alerts are optional in the application but currently required by this terraform module. Alerts include a **Trace ID** for easy debugging. To disable alerts, leave the webhook secret empty.
+> **Note:**  Alerts include a **Trace ID** for easy debugging. To disable alerts, leave the slack_webhook_url_secret_id empty.
 
 ## 📤 Module Outputs
 
@@ -122,46 +122,27 @@ After deployment, configure your secrets to publish events to the created topic:
 gcloud secrets update user-service-env \
   --add-topics=projects/YOUR_PROJECT_ID/topics/${TOPIC_NAME}
 ```
+Make sure secret manager service account has publish to pubsub permissions , Refer
+- [Secret Manager Event Notifications](https://cloud.google.com/secret-manager/docs/event-notifications)
 
 ### 2. Label Your Cloud Run Services
 
 For any Cloud Run service that should reload when secrets change:
 
 ```bash
-# Get the reloader cloudrun URL
-RELOADER_CLOUDRUN_URL=$(terraform output -raw cloud_run_url)
-
 # Get the secret name hash for your secret name
-SECRET_HASH=$(curl -X POST ${RELOADER_CLOUDRUN_URL}/v1/hash \
+SECRET_NAME_HASH=$(curl -X POST ${RELOADER_CLOUDRUN_URL}/v1/hash \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
   -d '{"secretName": "user-service-env"}' | jq -r '.secretNameHash')
 
-# Add the label to your service
-gcloud run services update YOUR_SERVICE_NAME \
-  --region=YOUR_REGION \
-  --update-labels="run_secret_reloader-${SECRET_HASH}=true"
+# Add the following label to your service
+"run_secret_reloader-${SECRET_NAME_HASH}=true"
 ```
-
-## 🔍 Verification
-
-### Test the Deployment
-
-```bash
-# Check if the service is running
-RELOADER_CLOUDRUN_URL=$(terraform output -raw cloud_run_url)
-curl ${RELOADER_CLOUDRUN_URL}/health
-
-# Test the hash endpoint
-curl -X POST ${RELOADER_CLOUDRUN_URL}/v1/hash \
-  -H "Content-Type: application/json" \
-  -d '{"secretName": "user-service-env"}'
-```
-
-
 
 ## 📚 Additional Resources
 
-- [Secret Manager Event Notifications](https://cloud.google.com/secret-manager/docs/event-notifications)
-- [Cloud Run IAM Roles](https://cloud.google.com/run/docs/reference/iam/roles)
+
 - [Pub/Sub Push Subscriptions](https://cloud.google.com/pubsub/docs/push)
 - [Main Project Documentation](../README.md)
+
