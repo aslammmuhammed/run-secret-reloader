@@ -41,7 +41,11 @@ SECRET_NAME_HASH=$(curl -X POST https://YOUR_RELOADER_URL/v1/hash \
   -H "Content-Type: application/json" \
   -d '{"secretName": "user-service-env"}' | jq -r '.secretNameHash')
 
+# Add this label to your Cloud Run service to enable automatic redeployment
 "run_secret_reloader-${SECRET_NAME_HASH}=true"
+
+# To turn off the reloader, set the label to false
+"run_secret_reloader-${SECRET_NAME_HASH}=false"
 ```
 
 🎉 **That's it!** Your Cloud Run service will automatically redeploy with the new secret.
@@ -142,3 +146,9 @@ Apache License 2.0 © 2025 Aslam Muhammed
 ---
 
 Built with ❤️ for the Google Cloud community
+
+## ⚠️ Current Limitations
+
+1. **Traffic Splitting**: Not handled. Only the latest traffic-serving revision is updated to the new revision. Old traffic-serving revisions remain the same and are not restarted.
+
+2. **Multi-Region Support**: Currently not supported, but coming soon.
