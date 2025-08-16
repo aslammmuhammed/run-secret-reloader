@@ -19,7 +19,6 @@ Stop manual redeployments and let your services automatically pick up fresh secr
 - 🌐 **Multi-service Support** - Handle multiple Cloud Run services per secret
 - ☁️ **Serverless** - Runs as a Cloud Run service, scales to zero when idle
 
-🎉 **That's it!** Your Cloud Run service will automatically redeploy with the new secret.
 
 Cloud Run has built-in [secret hot-reload capabilities](https://cloud.google.com/run/docs/configuring/services/secrets), but most applications read secrets only once at startup. This project bridges that gap by automatically triggering redeployments when secrets change.
 
@@ -62,6 +61,8 @@ SECRET_NAME_HASH=$(curl -X POST https://YOUR_RELOADER_URL/v1/hash \
 # To turn off the reloader, set the label to false
 "run_secret_reloader-${SECRET_NAME_HASH}=false"
 ```
+
+🎉 **That's it!** Your Cloud Run service will automatically redeploy with the new secret.
 
 ## 🛠️ API Reference
 
