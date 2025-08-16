@@ -47,6 +47,7 @@ resource "google_cloud_run_v2_service" "reloader" {
 
   template {
     service_account = google_service_account.reloader.email
+    timeout = "900s"
     containers {
       image = var.cloud_run_image
       resources {
@@ -116,7 +117,7 @@ resource "google_pubsub_subscription" "push" {
   name  = var.subscription_name
   topic = google_pubsub_topic.topic.name
 
-  ack_deadline_seconds = 600
+  ack_deadline_seconds = 900
 
   push_config {
     push_endpoint = "${google_cloud_run_v2_service.reloader.uri}${var.push_endpoint_path}"
