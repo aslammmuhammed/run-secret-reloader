@@ -101,7 +101,7 @@ terraform apply
 | `slack_webhook_url_secret_id` | `string` | Secret ID for Slack webhook URL | - | ❌ |
 | `slack_webhook_url_secret_version` | `string` | Secret version for Slack webhook URL | - | ❌ |
 
-> **Note:**  Alerts include a **Trace ID** for easy debugging. To disable alerts, leave the slack_webhook_url_secret_id empty.
+> **Note:** Alerts include a **Trace ID** for easy debugging. To disable alerts, leave the slack_webhook_url_secret_id empty.
 
 ## 📤 Module Outputs
 
@@ -122,7 +122,8 @@ After deployment, configure your secrets to publish events to the created topic:
 gcloud secrets update user-service-env \
   --add-topics=projects/YOUR_PROJECT_ID/topics/${TOPIC_NAME}
 ```
-Make sure secret manager service account has publish to pubsub permissions , Refer
+
+Make sure the Secret Manager service account has publish to Pub/Sub permissions. Refer to:
 - [Secret Manager Event Notifications](https://cloud.google.com/secret-manager/docs/event-notifications)
 
 ### 2. Label Your Cloud Run Services
@@ -141,7 +142,6 @@ SECRET_NAME_HASH=$(curl -X POST ${RELOADER_CLOUDRUN_URL}/v1/hash \
 ```
 
 ## 📚 Additional Resources
-
 
 - [Pub/Sub Push Subscriptions](https://cloud.google.com/pubsub/docs/push)
 - [Main Project Documentation](../README.md)
