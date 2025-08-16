@@ -98,8 +98,8 @@ terraform apply
 | `cloud_run_cpu` | `string` | CPU limit | `1` | ❌ |
 | `push_endpoint_path` | `string` | Webhook endpoint path | `/v1/webhook` | ❌ |
 | `service_account_name` | `string` | Service account name | `run-secret-reloader-sa` | ❌ |
-| `slack_webhook_url_secret_id` | `string` | Secret ID for Slack webhook URL | - | ✅ |
-| `slack_webhook_url_secret_version` | `string` | Secret version for Slack webhook URL | - | ✅ |
+| `slack_webhook_url_secret_id` | `string` | Secret ID for Slack webhook URL | - | ❌ |
+| `slack_webhook_url_secret_version` | `string` | Secret version for Slack webhook URL | - | ❌ |
 
 > **Note:**  Alerts include a **Trace ID** for easy debugging. To disable alerts, leave the slack_webhook_url_secret_id empty.
 

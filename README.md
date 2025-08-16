@@ -1,6 +1,6 @@
 # 🔄 Run Secret Reloader
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Go](https://img.shields.io/badge/go-%23007BCD.svg?style=flat&logo=go&logoColor=white)](https://golang.org/)
 [![Google Cloud](https://img.shields.io/badge/GoogleCloud-%234285F4.svg?style=flat&logo=google-cloud&logoColor=white)](https://cloud.google.com/)
 
@@ -270,7 +270,7 @@ curl -X POST http://localhost:8080/v1/webhook \
 
 ## 📜 License
 
-MIT © 2025 Aslam Muhammed
+Apache License 2.0 © 2025 Aslam Muhammed
 
 ---
 
