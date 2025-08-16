@@ -61,9 +61,11 @@ variable "service_account_name" {
 variable "slack_webhook_url_secret_id" {
   type        = string
   description = "Secret ID for Slack webhook URL"
+  default     = ""
 }
 
 variable "slack_webhook_url_secret_version" {
   type        = string
   description = "Secret version for Slack webhook URL"
+  default     = "latest"
 }
