@@ -21,7 +21,7 @@ Stop manual redeployments and let your services automatically pick up fresh secr
 
 🎉 **That's it!** Your Cloud Run service will automatically redeploy with the new secret.
 
-Cloud Run has built-in [secret hot-reload capabilities](https://medium.com/google-cloud/cloud-run-hot-reload-your-secret-manager-secrets-ff2c502df666), but most applications read secrets only once at startup. This project bridges that gap by automatically triggering redeployments when secrets change.
+Cloud Run has built-in [secret hot-reload capabilities](https://cloud.google.com/run/docs/configuring/services/secrets), but most applications read secrets only once at startup. This project bridges that gap by automatically triggering redeployments when secrets change.
 
 **The Problem:**
 - Environment variables are read once at startup
@@ -151,10 +151,10 @@ terraform/              – infrastructure as code
 
 2. **Multi-Region Support**: Currently not supported, but coming soon 🚀.
 
-## 📜 License
-
-Apache License 2.0 © 2025 Aslam Muhammed
-
 ---
 
 Built with ❤️ for the Google Cloud community
+
+## 📜 License
+
+Apache License 2.0 © 2025 Aslam Muhammed
