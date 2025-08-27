@@ -47,7 +47,7 @@ resource "google_cloud_run_v2_service" "reloader" {
 
   template {
     service_account = google_service_account.reloader.email
-    timeout = "900s"
+    timeout = "600s"
     containers {
       image = var.cloud_run_image
       resources {
@@ -83,16 +83,20 @@ resource "google_cloud_run_v2_service" "reloader" {
         name  = "GOOGLE_CLOUD_PROJECT_ID"
         value = var.project_id
       }
-
-      env {
-        name = "SLACK_WEBHOOK_URL"
-        value_source {
-          secret_key_ref {
-            secret  = var.slack_webhook_url_secret_id
-            version = var.slack_webhook_url_secret_version
+      
+      dynamic "env" {
+        for_each = var.slack_webhook_url_secret_id != "" ? [1] : []
+        content {
+          name = "SLACK_WEBHOOK_URL"
+          value_source {
+            secret_key_ref {
+              secret  = var.slack_webhook_url_secret_id
+              version = var.slack_webhook_url_secret_version
+            }
           }
         }
       }
+
       ports {
         container_port = 8080
       }
@@ -102,6 +106,10 @@ resource "google_cloud_run_v2_service" "reloader" {
       max_instance_count = 5
     }
     max_instance_request_concurrency = 50
+  }
+
+  lifecycle {
+    prevent_destroy = false
   }
 
 }
@@ -128,14 +136,3 @@ resource "google_pubsub_subscription" "push" {
   }
 }
 
-output "cloud_run_url" {
-  value = google_cloud_run_v2_service.reloader.uri
-}
-
-output "pubsub_topic" {
-  value = google_pubsub_topic.topic.name
-}
-
-output "pubsub_subscription" {
-  value = google_pubsub_subscription.push.name
-}
