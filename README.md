@@ -122,6 +122,8 @@ GET /health
 **Template Labels** (for tracking, automatically managed by application):
 - `run_secret_reloader-<secret_name_hash>_version` → secret version
 
+![Architecture Diagram](./docs/assets/arch_diagram.png)
+
 ### Project Structure
 
 ```
