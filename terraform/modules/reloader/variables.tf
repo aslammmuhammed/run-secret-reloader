@@ -31,7 +31,7 @@ variable "cloud_run_service_name" {
 variable "cloud_run_image" {
   type        = string
   description = "Container image for Cloud Run (Docker Hub reference)"
-  default     = "keyzersoze/run-secret-reloader:v0.1.0"
+  default     = "keyzersoze/run-secret-reloader:v1.0.0"
 }
 
 variable "cloud_run_memory" {
@@ -68,4 +68,10 @@ variable "slack_webhook_url_secret_version" {
   type        = string
   description = "Secret version for Slack webhook URL"
   default     = "latest"
+}
+
+variable "message_retention_duration" {
+  type        = string
+  description = "Message retention duration for Pub/Sub"
+  default     = "1200s"
 }

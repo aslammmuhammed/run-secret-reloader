@@ -47,7 +47,7 @@ resource "google_cloud_run_v2_service" "reloader" {
 
   template {
     service_account = google_service_account.reloader.email
-    timeout = "600s"
+    timeout         = "600s"
     containers {
       image = var.cloud_run_image
       resources {
@@ -83,7 +83,7 @@ resource "google_cloud_run_v2_service" "reloader" {
         name  = "GOOGLE_CLOUD_PROJECT_ID"
         value = var.project_id
       }
-      
+
       dynamic "env" {
         for_each = var.slack_webhook_url_secret_id != "" ? [1] : []
         content {
@@ -117,7 +117,7 @@ resource "google_cloud_run_v2_service" "reloader" {
 # Pub/Sub topic for secret updates
 resource "google_pubsub_topic" "topic" {
   name                       = var.topic_name
-  message_retention_duration = "86400s"
+  message_retention_duration = var.message_retention_duration
 }
 
 # Push subscription with OIDC token using service account
@@ -125,7 +125,8 @@ resource "google_pubsub_subscription" "push" {
   name  = var.subscription_name
   topic = google_pubsub_topic.topic.name
 
-  ack_deadline_seconds = 900
+  ack_deadline_seconds       = 600
+  message_retention_duration = var.message_retention_duration
 
   push_config {
     push_endpoint = "${google_cloud_run_v2_service.reloader.uri}${var.push_endpoint_path}"
@@ -133,6 +134,15 @@ resource "google_pubsub_subscription" "push" {
     oidc_token {
       service_account_email = google_service_account.reloader.email
     }
+  }
+
+  expiration_policy {
+    ttl = "" #never
+  }
+
+  retry_policy {
+    minimum_backoff = "300s"
+    maximum_backoff = "500s"
   }
 }
 
