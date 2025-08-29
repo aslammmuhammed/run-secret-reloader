@@ -122,6 +122,20 @@ GET /health
 **Template Labels** (for tracking, automatically managed by application):
 - `run_secret_reloader-<secret_name_hash>_version` → secret version
 
+### Architecture Diagram
+![Architecture Diagram](./docs/assets/arch_diagram.png)
+
+### FAQ
+
+#### 1. Why are labels used for service discovery?
+Labels are used because the Cloud Run Admin v1 API supports efficient, server-side filtering based on them. This allows the reloader to quickly identify only the relevant services that need redeployment without having to list all services and filter them on the client-side, which is more scalable and performant.
+
+#### 2. Why is the secret name hashed in the label?
+Cloud Run labels have strict character restrictions (they must contain only lowercase letters, numbers, underscores, and dashes). Hashing the secret name (using MD5) ensures a consistent and valid label key, regardless of the characters in the original secret name. For readability, the original secret name is stored back in the service's template annotations.
+
+#### 3. How does updating the template trigger a redeployment?
+Cloud Run automatically creates a new service revision only when its template is modified. Changes to service-level metadata (like top-level labels or descriptions) do not trigger a redeployment. This reloader works by making a small, benign change to the template's annotations, which forces Cloud Run to create a new revision. This new revision then starts up with the latest version of the secret. An alternative for this is being planned in [issue #13](https://github.com/aslammmuhammed/run-secret-reloader/issues/13).
+
 ### Project Structure
 
 ```

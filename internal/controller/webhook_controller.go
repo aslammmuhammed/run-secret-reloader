@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -76,16 +77,15 @@ func (w *webhookController) processWebhook(c *gin.Context) {
 
 	// Log HTTP response
 	allNames := append(append(updatedNames, failedNames...), skippedNames...)
-	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: "+strconv.Itoa(http.StatusOK)+" | servicesFound: "+strconv.Itoa(len(allNames))+" | servicesUpdated: "+strconv.Itoa(len(updatedNames))+" | servicesFailed: "+strconv.Itoa(len(failedNames))+" | servicesSkipped: "+strconv.Itoa(len(skippedNames)))
-
-	var message string
-	if len(updatedNames) > 0 {
-		message = "Webhook processed successfully. Services updated: " + strconv.Itoa(len(updatedNames))
-	} else if len(skippedNames) > 0 {
-		message = "Webhook processed successfully. No services required an update."
-	} else {
-		message = "Webhook processing failed. Services failed to update: " + strconv.Itoa(len(failedNames))
+	statusCode := http.StatusOK
+	// If all services failed to update
+	if len(allNames) > 0 && len(allNames) == len(failedNames) {
+		statusCode = http.StatusInternalServerError
 	}
+	w.logger.Info(c.Request.Context(), "HTTP request completed | endpoint: /webhook | status: "+strconv.Itoa(statusCode)+" | servicesFound: "+strconv.Itoa(len(allNames))+" | servicesUpdated: "+strconv.Itoa(len(updatedNames))+" | servicesFailed: "+strconv.Itoa(len(failedNames))+" | servicesSkipped: "+strconv.Itoa(len(skippedNames)))
+
+	message := fmt.Sprintf("sent response: Webhook processing completed. Updated: %d ,skipped: %d, failed: %d", len(updatedNames), len(skippedNames), len(failedNames))
+	w.logger.Info(c.Request.Context(), message)
 
 	// Return structured response
 	response := dto.WebhookResponse{
@@ -98,5 +98,5 @@ func (w *webhookController) processWebhook(c *gin.Context) {
 		SkippedUpdates: skippedNames,
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(statusCode, response)
 }

@@ -36,7 +36,7 @@ module "reloader" {
 module "reloader" {
   source                           = "./terraform/modules/reloader"
   project_id                       = "your-project-id"
-  cloud_run_image                  = "keyzersoze/run-secret-reloader:v0.1.0"
+  cloud_run_image                  = "keyzersoze/run-secret-reloader:v1.0.0"
   
   # Slack alerts with Trace ID for debugging 
   slack_webhook_url_secret_id      = "slack-webhook-url"
@@ -59,8 +59,9 @@ module "reloader" {
   cloud_run_cpu          = "1"
   
   # Pub/Sub configuration
-  topic_name        = "secret-events"
-  subscription_name = "secret-events-push"
+  topic_name                  = "secret-events"
+  subscription_name           = "secret-events-push"
+  message_retention_duration  = "1800s" # 30 minutes
   
   # Service account
   service_account_name = "reloader-sa"
@@ -92,14 +93,15 @@ terraform apply
 | `region` | `string` | GCP region for Cloud Run | `us-central1` | ❌ |
 | `topic_name` | `string` | Pub/Sub topic name | `run-secret-reloader` | ❌ |
 | `subscription_name` | `string` | Pub/Sub subscription name | `run-secret-reloader-push` | ❌ |
+| `message_retention_duration` | `string` | Message retention duration for Pub/Sub | `1200s` | ❌ |
 | `cloud_run_service_name` | `string` | Cloud Run service name | `run-secret-reloader` | ❌ |
-| `cloud_run_image` | `string` | Container image | `keyzersoze/run-secret-reloader:v0.1.0` | ❌ |
+| `cloud_run_image` | `string` | Container image for Cloud Run (Docker Hub reference) | `keyzersoze/run-secret-reloader:v1.0.0` | ❌ |
 | `cloud_run_memory` | `string` | Memory limit | `256Mi` | ❌ |
 | `cloud_run_cpu` | `string` | CPU limit | `1` | ❌ |
 | `push_endpoint_path` | `string` | Webhook endpoint path | `/v1/webhook` | ❌ |
 | `service_account_name` | `string` | Service account name | `run-secret-reloader-sa` | ❌ |
-| `slack_webhook_url_secret_id` | `string` | Secret ID for Slack webhook URL | - | ❌ |
-| `slack_webhook_url_secret_version` | `string` | Secret version for Slack webhook URL | - | ❌ |
+| `slack_webhook_url_secret_id` | `string` | Secret ID for Slack webhook URL | `""` | ❌ |
+| `slack_webhook_url_secret_version` | `string` | Secret version for Slack webhook URL | `latest` | ❌ |
 
 > **Note:** Alerts include a **Trace ID** for easy debugging. To disable alerts, leave the slack_webhook_url_secret_id empty.
 
