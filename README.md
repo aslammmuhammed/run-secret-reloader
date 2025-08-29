@@ -128,7 +128,7 @@ GET /health
 ### FAQ
 
 #### 1. Why are labels used for service discovery?
-Labels are used because the Cloud Run Admin API supports efficient, server-side filtering based on them. This allows the reloader to quickly identify only the relevant services that need redeployment without having to list all services and filter them on the client-side, which is more scalable and performant.
+Labels are used because the Cloud Run Admin v1 API supports efficient, server-side filtering based on them. This allows the reloader to quickly identify only the relevant services that need redeployment without having to list all services and filter them on the client-side, which is more scalable and performant.
 
 #### 2. Why is the secret name hashed in the label?
 Cloud Run labels have strict character restrictions (they must contain only lowercase letters, numbers, underscores, and dashes). Hashing the secret name (using MD5) ensures a consistent and valid label key, regardless of the characters in the original secret name. For readability, the original secret name is stored back in the service's template annotations.
